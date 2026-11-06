@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Player</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: transparent; font-family: "Roboto", -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; padding: 16px; }
+
+  .player { position: relative; width: 100%; max-width: 440px; height: 140px; }
+
+  .card {
+    position: absolute; left: 70px; right: 0; top: 0; bottom: 0;
+    background: #fff; border-radius: 22px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    padding: 20px 22px 0 110px;
+  }
+
+  .disc {
+    position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 150px; height: 150px; border-radius: 50%;
+    background: #222 center / cover no-repeat;
+    box-shadow: 0 8px 22px rgba(0,0,0,.28);
+    animation: spin 12s linear infinite; animation-play-state: paused;
+    z-index: 2;
+  }
+  .disc.playing { animation-play-state: running; }
+  .disc::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: 14px; height: 14px; margin: -7px 0 0 -7px;
+    background: #fff; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.08);
+  }
+  @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+  .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .title { font-size: 16px; font-weight: 500; color: #111; line-height: 1.2; }
+  .artist { font-size: 12px; color: #777; margin-top: 3px; }
+  .info { min-width: 0; }
+  .info div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .icon-btn { background: none; border: 0; cursor: pointer; display: grid; place-items: center; color: #111; }
+  .icon-btn svg { width: 100%; height: 100%; fill: currentColor; }
+  #mute { width: 22px; height: 22px; color: #aaa; flex: none; margin-left: 8px; }
+  #mute.on { color: #111; }
+
+  .bar { margin-top: 14px; height: 4px; background: #d6d6d6; border-radius: 4px; cursor: pointer; position: relative; }
+  .bar::before { content: ""; position: absolute; inset: -8px 0; } /* 클릭 영역 확장 */
+  .fill { height: 100%; width: 0; background: #0b3fa8; border-radius: 4px; }
+
+  .controls { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 0 4px; }
+  .controls .icon-btn { width: 28px; height: 28px; }
+  #play { width: 32px; height: 32px; }
+  #next { width: 46px; height: 46px; border-radius: 50%; border: 2px solid #ddd; background: #f1f1f1; margin: -9px -6px -9px 0; }
+  #next svg { width: 26px; height: 26px; }
+  .icon-btn:active { transform: scale(.92); }
+</style>
+</head>
+<body>
+
+<div class="player">
+  <div class="disc" id="disc"></div>
+  <div class="card">
+    <div class="top">
+      <div class="info">
+        <div class="title" id="title"></div>
+        <div class="artist" id="artist"></div>
+      </div>
+      <button class="icon-btn" id="mute" aria-label="mute">
+        <svg viewBox="0 0 24 24" id="muteIcon"></svg>
+      </button>
+    </div>
+
+    <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
+
+    <div class="controls">
+      <button class="icon-btn" id="prev" aria-label="rewind 10s">
+        <svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6 8.5 6V6l-8.5 6z"/></svg>
+      </button>
+      <button class="icon-btn" id="play" aria-label="play/pause"><svg viewBox="0 0 24 24" id="playIcon"></svg></button>
+      <button class="icon-btn" id="next" aria-label="forward 10s">
+        <svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<audio id="audio" preload="metadata"></audio>
+
+<script>
+  /* ===================== 여기만 수정하세요 ===================== */
+  const CONFIG = {
+    title:  "곡명을 입력하세요",
+    artist: "가수명을 입력하세요",
+    albumUrl: "https://example.com/album.jpg",   // 앨범 자켓 이미지 URL
+    audioUrl: "https://example.com/song.mp3",    // 음원 URL (mp3 등 직접 재생 가능한 링크)
+    skipSeconds: 10,                              // ◀◀ ▶▶ 버튼 이동 초
+    loop: false
+  };
+  /* ============================================================ */
+
+  const $ = id => document.getElementById(id);
+  const audio = $("audio"), disc = $("disc");
+
+  $("title").textContent  = CONFIG.title;
+  $("artist").textContent = CONFIG.artist;
+  disc.style.backgroundImage = `url("${CONFIG.albumUrl}")`;
+  audio.src = CONFIG.audioUrl;
+  audio.loop = CONFIG.loop;
+
+  const ICON = {
+    play:  '<path d="M8 5v14l11-7z"/>',
+    pause: '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>',
+    vol:   '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/>',
+    mute:  '<path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.5 2.5v-.7zM19 12a6.9 6.9 0 0 1-.9 3.4l1.5 1.5A8.9 8.9 0 0 0 21 12a9 9 0 0 0-7-8.8v2.1c2.9.9 5 3.5 5 6.7zM4.3 3 3 4.3 7.7 9H3v6h4l5 5v-6.7l4.2 4.2c-.7.5-1.4.9-2.2 1.2v2.1a9 9 0 0 0 3.6-1.8l2 2 1.3-1.3L4.3 3zM12 4 9.9 6.1 12 8.2V4z"/>'
+  };
+  $("playIcon").innerHTML = ICON.play;
+  $("muteIcon").innerHTML = ICON.vol;
+
+  $("play").onclick = () => audio.paused ? audio.play().catch(()=>{}) : audio.pause();
+  audio.onplay  = () => { $("playIcon").innerHTML = ICON.pause; disc.classList.add("playing"); };
+  audio.onpause = () => { $("playIcon").innerHTML = ICON.play;  disc.classList.remove("playing"); };
+  audio.onended = () => { $("fill").style.width = "0%"; };
+
+  audio.ontimeupdate = () => {
+    if (audio.duration) $("fill").style.width = (audio.currentTime / audio.duration * 100) + "%";
+  };
+
+  $("bar").onclick = e => {
+    const r = $("bar").getBoundingClientRect();
+    if (audio.duration) audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration;
+  };
+
+  $("prev").onclick = () => audio.currentTime = Math.max(0, audio.currentTime - CONFIG.skipSeconds);
+  $("next").onclick = () => audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + CONFIG.skipSeconds);
+
+  $("mute").onclick = () => {
+    audio.muted = !audio.muted;
+    $("mute").classList.toggle("on", !audio.muted);
+    $("muteIcon").innerHTML = audio.muted ? ICON.mute : ICON.vol;
+  };
+  // 초기 상태: 소리 켜짐(진한 아이콘)
+  $("mute").classList.add("on");
+</script>
+</body>
+</html>
